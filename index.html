@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>YouTube風サムネプレビュー</title>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#fff;color:#111;line-height:1.4;}
+.top-wrap,.bottombar{display:none;}
+h1{font-size:1.3rem;font-weight:600;margin:1rem;}
+body.mobile-only h1{margin-top:96px;}
+.controls{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin:1rem;}
+button{cursor:pointer;border:none;border-radius:6px;padding:.5rem 1rem;font-weight:600;background:#1976d2;color:#fff;transition:transform .15s;}
+button:hover{transform:translateY(-2px);}button.active{background:#c62828;}
+input[type=text],.edit-input{padding:.35rem .5rem;border:1px solid #ccc;border-radius:6px;}
+.edit-input{width:90%;font-size:.9rem;}
+.wrapper{display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;padding-bottom:80px;}
+.grid-wrapper{flex:1 1 580px;}
+#gallery{display:grid;gap:1rem;padding:1rem;grid-template-columns:repeat(var(--cols,4),1fr);}
+.dnd-area{flex:1 1 220px;min-height:52px;display:flex;align-items:center;justify-content:center;background:#fff;border:2px dashed #bbb;border-radius:8px;color:#777;transition:border .25s;cursor:pointer;}
+.dnd-area.dragover{border-color:#1976d2;color:#1976d2;}
+.view-toggle{display:flex;gap:.5rem;margin-left:auto;}
+.card{background:#fff;border-radius:12px;overflow:hidden;width:100%;position:relative;}
+.card.dragging{opacity:.35;transform:scale(.98);} .card[draggable=true]{cursor:grab;}
+.thumb-wrapper{position:relative;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:#e0e0e0;overflow:hidden;border-radius:12px;}
+.thumb-wrapper img{width:100%;height:100%;object-fit:cover;}
+.duration{position:absolute;bottom:6px;right:6px;font-size:.75rem;padding:0 .25rem;background:rgba(0,0,0,.8);color:#fff;border-radius:4px;}
+.meta{padding:.6rem .8rem;display:flex;gap:.6rem;}
+.avatar{width:36px;height:36px;border-radius:50%;background:#000;flex-shrink:0;}
+.info{flex:1 1 auto;min-width:0;}
+.title{font-size:.95rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.channel,.stats{font-size:.78rem;color:#606060;} .channel{margin-bottom:.1rem;}
+.placeholder .thumb-wrapper{background:#e0e0e0;} .placeholder .meta{display:none;}
+.phone-container{flex:0 0 400px;display:flex;justify-content:center;align-items:flex-start;padding-top:.5rem;margin-bottom:2.5rem;}
+.phone-shell{width:360px;height:720px;border-radius:32px;background:#000;box-shadow:0 6px 12px rgba(0,0,0,.35);padding:20px;position:relative;}
+.speaker{width:80px;height:6px;background:#333;border-radius:3px;position:absolute;top:14px;left:50%;transform:translateX(-50%);}
+.phone-screen{width:100%;height:100%;background:#fff;border-radius:24px;display:flex;flex-direction:column;overflow:hidden;}
+.phone-head{position:sticky;top:0;z-index:2;background:#fff;transition:transform .25s ease;}
+.phone-head.hidden{transform:translateY(-100%);}
+.phone-topbar{height:48px;background:#fff;border-bottom:1px solid #ddd;}
+.phone-chip{display:none;}
+.phone-chip::-webkit-scrollbar{display:none;}
+.phone-chip .chip{width:52px;height:22px;border-radius:11px;background:#e5e5e5;font-size:0;}
+.phone-chip .chip.active{background:#e5e5e5;}
+.phone-content{flex:1 1 auto;overflow-y:auto;scrollbar-width:thin;background:#fff;}
+.phone-content::-webkit-scrollbar{width:6px;} .phone-content::-webkit-scrollbar-thumb{background:#bbb;border-radius:3px;}
+.phone-bnav{height:96px;background:#fff;border-top:1px solid #ccc;position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid #ccc;position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid #ccc;position:sticky;bottom:0;z-index:2;background:#fff;border-top:1px solid #ccc;position:sticky;bottom:0;z-index:2;}
+body.pc-only .grid-wrapper{display:block;} body.pc-only .phone-container{display:none;}
+body.mobile-only .grid-wrapper{display:none;} body.mobile-only .phone-container{display:flex;}
+@media(max-width:800px){.wrapper{flex-direction:column;align-items:center;}.grid-wrapper{flex:1 1 100%;}.phone-container{flex:0 0 320px;}}
+</style>
+</head>
+<body class="pc-only">
+
+<h1>YouTube風サムネプレビュー</h1>
+<div class="controls">
+  <label>タイトル(任意):<input id="titleInput" type="text" placeholder="例: 新機能紹介！"></label>
+  <div id="dnd" class="dnd-area">サムネ画像をドラッグ＆ドロップ (またはクリック選択)</div>
+  <input id="fileInput" type="file" accept="image/*" hidden>
+  <button id="addBtn">追加</button>
+  <label>列数:<input id="colRange" type="range" min="1" max="6" value="4"></label>
+  <div class="view-toggle"><button id="pcBtn" class="active">PC表示</button><button id="spBtn">スマホ表示</button></div>
+</div>
+
+<div class="wrapper">
+  <div class="grid-wrapper"><div id="gallery"></div></div>
+  <div class="phone-container">
+    <div class="phone-shell"><span class="speaker"></span>
+      <div id="phoneScreen" class="phone-screen">
+        <div class="phone-head" id="phoneHead">
+          <div class="phone-topbar"></div>
+          <div class="phone-chip"><div class="chip active"></div><div class="chip"></div><div class="chip"></div><div class="chip"></div></div>
+        </div>
+        <div id="phoneContent" class="phone-content"></div>
+        <div class="phone-bnav"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLOT_COUNT=8,randomTitles=["おすすめ神アプリ","衝撃の事実","知らないと損","便利サイトTOP10","完全攻略ガイド","最新機能解説","絶対に入れるべき","裏技公開","秒で解決","初心者必見"];
+const $=s=>document.querySelector(s);const gallery=$('#gallery'),phoneContent=$('#phoneContent');
+for(let i=0;i<SLOT_COUNT;i++){const ph=document.createElement('div');ph.className='card placeholder';ph.innerHTML='<div class="thumb-wrapper"></div><div class="meta"></div>';gallery.appendChild(ph);phoneContent.appendChild(ph.cloneNode(true));}
+const dnd=$('#dnd'),fileInput=$('#fileInput');let curFile=null;dnd.onclick=()=>fileInput.click();fileInput.onchange=e=>setFile(e.target.files[0]);dnd.ondragover=e=>(e.preventDefault(),dnd.classList.add('dragover'));dnd.ondragleave=()=>dnd.classList.remove('dragover');dnd.ondrop=e=>(e.preventDefault(),dnd.classList.remove('dragover'),setFile(e.dataTransfer.files[0]));function setFile(f){if(!f)return;curFile=f;dnd.textContent=`選択済: ${f.name}`;dnd.classList.add('selected');}
+$('#addBtn').onclick=()=>{if(!curFile){alert('画像を選択してください');return;}const r=new FileReader();r.onload=e=>{const d={id:Date.now().toString(36)+Math.random().toString(36).slice(2),title:$('#titleInput').value.trim()||randomTitles[Math.floor(Math.random()*randomTitles.length)],src:e.target.result};addCard(d);reset();};r.readAsDataURL(curFile);};function reset(){curFile=null;$('#titleInput').value='';dnd.textContent='サムネ画像をドラッグ＆ドロップ (またはクリック選択)';dnd.classList.remove('selected');}
+function cardHTML(d){return `<div class=thumb-wrapper><img src="${d.src}"><span class=duration>0:00</span></div><div class=meta><div class=avatar></div><div class=info><div class=title>${d.title}</div><div class=channel>MyChannel</div><div class=stats>1234 回視聴 ・ 1ヶ月前</div></div></div>`;}
+function addCard(d){const slot=gallery.querySelector('.placeholder');if(slot){set(slot,d,true);const ps=phoneContent.querySelector('.placeholder');if(ps)set(ps,d,false);}else append(d);}function set(card,d,intv){card.classList.remove('placeholder');card.dataset.id=d.id;card.innerHTML=cardHTML(d);if(intv){drag(card);edit(card);}}
+function append(d){const pc=document.createElement('div');pc.className='card';pc.dataset.id=d.id;pc.innerHTML=cardHTML(d);gallery.appendChild(pc);drag(pc);edit(pc);phoneContent.appendChild(pc.cloneNode(true));}
+$('#colRange').oninput=e=>document.body.style.setProperty('--cols',e.target.value);document.body.style.setProperty('--cols',$('#colRange').value);
+let dragSrc=null;function drag(c){c.draggable=true;c.ondragstart=()=>{dragSrc=c;c.classList.add('dragging');};c.ondragend=()=>{c.classList.remove('dragging');dragSrc=null;};c.ondragover=e=>e.preventDefault();c.ondrop=e=>{e.preventDefault();if(!dragSrc||dragSrc===c)return;swap(dragSrc,c);};}
+function swap(a,b){const p=a.parentNode,next=a.nextSibling===b?a:a.nextSibling;p.insertBefore(a,b);p.insertBefore(b,next);const pa=phoneContent.querySelector(`[data-id='${a.dataset.id}']`),pb=phoneContent.querySelector(`[data-id='${b.dataset.id}']`);if(pa&&pb){const pp=pa.parentNode,next2=pa.nextSibling===pb?pa:pa.nextSibling;pp.insertBefore(pa,pb);pp.insertBefore(pb,next2);}}
+function edit(c){const t=c.querySelector('.title');t.ondblclick=()=>{if(document.body.classList.contains('mobile-only'))return;const old=t.textContent;const inp=document.createElement('input');inp.className='edit-input';inp.value=old;let comp=false;inp.oncompositionstart=()=>comp=true;inp.oncompositionend=()=>comp=false;const fin=s=>{const v=s&&inp.value.trim()?inp.value.trim():old;const nt=document.createElement('div');nt.className='title';nt.textContent=v;inp.replaceWith(nt);edit(c);phoneContent.querySelector(`[data-id='${c.dataset.id}'] .title`).textContent=v;};inp.onkeydown=e=>{if(e.key==='Enter'&&!comp)fin(true);if(e.key==='Escape')fin(false);};inp.onblur=()=>fin(true);t.replaceWith(inp);inp.focus();inp.select();};}
+$('#pcBtn').onclick=()=>{document.body.className='pc-only';$('#pcBtn').classList.add('active');$('#spBtn').classList.remove('active');};$('#spBtn').onclick=()=>{document.body.className='mobile-only';$('#spBtn').classList.add('active');$('#pcBtn').classList.remove('active');};
+const phoneScreen=$('#phoneScreen'),head=$('#phoneHead');let last=0;phoneScreen.addEventListener('scroll',()=>{const y=phoneScreen.scrollTop;if(y>last&&y>80)head.classList.add('hidden');else head.classList.remove('hidden');last=y;});
+</script>
+</body>
+</html>
