@@ -13,16 +13,16 @@ body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#fff;co
 
 /* === CONTROLS === */
 h1{font-size:1.3rem;font-weight:600;margin:1rem;}
-body.mobile-only h1{margin-top:96px;}           /* 内部ヘッダー分 */
+body.mobile-only h1{margin-top:96px;}
 .controls{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin:1rem;}
-body.mobile-only .controls>*:not(.view-toggle){display:none;} /* スマホでトグルだけ残す */
+body.mobile-only .controls>*:not(.view-toggle){display:none;}
 button{cursor:pointer;border:none;border-radius:6px;padding:.5rem 1rem;font-weight:600;background:#1976d2;color:#fff;transition:transform .15s;}
 button:hover{transform:translateY(-2px);}button.active{background:#c62828;}
 input[type=text],.edit-input{padding:.35rem .5rem;border:1px solid #ccc;border-radius:6px;}
 .edit-input{width:90%;font-size:.9rem;}
 
-/* === MAIN LAYOUT === */
-.wrapper{display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;padding-bottom:96px;}/* bottom nav 高さ */
+/* === LAYOUT === */
+.wrapper{display:flex;gap:2rem;flex-wrap:wrap;justify-content:center;padding-bottom:96px;}
 .grid-wrapper{flex:1 1 580px;}
 #gallery{display:grid;gap:1rem;padding:1rem;grid-template-columns:repeat(var(--cols,4),1fr);}
 .dnd-area{flex:1 1 220px;min-height:52px;display:flex;align-items:center;justify-content:center;background:#fff;border:2px dashed #bbb;border-radius:8px;color:#777;transition:border .25s;cursor:pointer;}
@@ -32,6 +32,7 @@ input[type=text],.edit-input{padding:.35rem .5rem;border:1px solid #ccc;border-r
 /* === CARD === */
 .card{background:#fff;border-radius:12px;overflow:hidden;width:100%;position:relative;}
 .card.dragging{opacity:.35;transform:scale(.98);} .card[draggable=true]{cursor:grab;}
+.card.selected{outline:3px solid #1976d2;}
 .thumb-wrapper{position:relative;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:#e0e0e0;overflow:hidden;border-radius:12px;}
 .thumb-wrapper img{width:100%;height:100%;object-fit:cover;}
 .duration{position:absolute;bottom:6px;right:6px;font-size:.75rem;padding:0 .25rem;background:rgba(0,0,0,.8);color:#fff;border-radius:4px;}
@@ -56,7 +57,7 @@ input[type=text],.edit-input{padding:.35rem .5rem;border:1px solid #ccc;border-r
 /* === VISIBILITY === */
 body.pc-only .grid-wrapper{display:block;} body.pc-only .phone-container{display:none;}
 body.mobile-only .grid-wrapper{display:none;} body.mobile-only .phone-container{display:flex;}
-@media(max-width:800px){.wrapper{flex-direction:column;align-items:center;}.grid-wrapper{flex:1 1 100%;}.phone-container{flex:0 0 320px;}}
+@media(max-width:800px){.wrapper{flex-direction:column;align-items:center;} .grid-wrapper{flex:1 1 100%;} .phone-container{flex:0 0 320px;}}
 </style>
 </head>
 <body class="pc-only">
@@ -86,146 +87,93 @@ body.mobile-only .grid-wrapper{display:none;} body.mobile-only .phone-container{
 
 <!-- ===== SCRIPT ===== -->
 <script>
-/* === CONSTS & ELEMENTS === */
-const SLOT = 16;   /* プレースホルダー数 */
-const randomTitles = ["おすすめ神アプリ","衝撃の事実","知らないと損","便利サイトTOP10",
-                      "完全攻略ガイド","最新機能解説","絶対に入れるべき",
-                      "裏技公開","秒で解決","初心者必見"];
+const SLOT = 16;
+const randomTitles=["おすすめ神アプリ","衝撃の事実","知らないと損","便利サイトTOP10","完全攻略ガイド","最新機能解説","絶対に入れるべき","裏技公開","秒で解決","初心者必見"];
 
-const $ = s => document.querySelector(s);
-const gallery      = $('#gallery');
-const phoneContent = $('#phoneContent');
-
-/* === PLACEHOLDERS (index 0-15) === */
+const $ = s=>document.querySelector(s);
+const gallery=$('#gallery'), phoneContent=$('#phoneContent');
+/* === PLACEHOLDERS === */
 for(let i=0;i<SLOT;i++){
   const ph=document.createElement('div');
   ph.className='card placeholder'; ph.dataset.index=i;
   ph.innerHTML='<div class="thumb-wrapper"></div><div class="meta"></div>';
-  gallery.appendChild(ph);
-  phoneContent.appendChild(ph.cloneNode(true));
+  gallery.appendChild(ph); phoneContent.appendChild(ph.cloneNode(true));
 }
-/* === FILE INPUT & D&D === */
-const dnd=$('#dnd'),fileInput=$('#fileInput');
+
+/* === FILE & D&D === */
+const dnd=$('#dnd'), fileInput=$('#fileInput');
 dnd.onclick=()=>fileInput.click();
 fileInput.onchange=e=>handleFile(e.target.files[0]);
-
+['dragover','dragleave','drop'].forEach(evt=>dnd.addEventListener(evt,e=>e.stopPropagation()));
 dnd.addEventListener('dragover',e=>(e.preventDefault(),dnd.classList.add('dragover')));
 dnd.addEventListener('dragleave',()=>dnd.classList.remove('dragover'));
 dnd.addEventListener('drop',e=>{e.preventDefault();dnd.classList.remove('dragover');if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0]);});
+document.addEventListener('dragover',e=>{if(e.target.closest('.placeholder'))e.preventDefault();});
+document.addEventListener('drop',e=>{const slot=e.target.closest('.placeholder');if(slot&&e.dataTransfer.files.length){e.preventDefault();handleFile(e.dataTransfer.files[0],slot);}});
 
-/* placeholder D&D */
-document.addEventListener('dragover',e=>{if(e.target.closest('.placeholder')) e.preventDefault();});
-document.addEventListener('drop',e=>{
-  const slot=e.target.closest('.placeholder');
-  if(slot && e.dataTransfer.files.length){
-    e.preventDefault(); handleFile(e.dataTransfer.files[0],slot);
-  }
-});
+/* === CARD UTIL === */
+const cardHTML=d=>`<div class="thumb-wrapper"><img src="${d.src}"><span class="duration">0:00</span></div><div class="meta"><div class="avatar"></div><div class="info"><div class="title">${d.title}</div><div class="channel">MyChannel</div><div class="stats">1234 回視聴 ・ 1ヶ月前</div></div></div>`;
+const phoneMatch=pc=>phoneContent.querySelector(`[data-index='${pc.dataset.index}']`);
 
-$('#addBtn').onclick=()=>alert('灰色の空枠に画像をドロップして追加してください');
-
-/* === CARD HELPERS === */
-function cardHTML(d){
-  return `<div class="thumb-wrapper"><img src="${d.src}"><span class="duration">0:00</span></div>
-          <div class="meta"><div class="avatar"></div><div class="info">
-            <div class="title">${d.title}</div>
-            <div class="channel">MyChannel</div>
-            <div class="stats">1234 回視聴 ・ 1ヶ月前</div>
-          </div></div>`;
-}
-
-function matchingPhone(pc){
-  return phoneContent.querySelector(`.placeholder[data-index='${pc.dataset.index}'], .card[data-index='${pc.dataset.index}']`);
-}
-
-function setCard(pc,d,intv){
-  pc.classList.remove('placeholder');
-  pc.dataset.id=d.id; pc.innerHTML=cardHTML(d);
-
-  const sp=matchingPhone(pc);
-  if(sp){ sp.classList.remove('placeholder'); sp.dataset.id=d.id; sp.innerHTML=cardHTML(d); }
-
-  if(intv){ enableDrag(pc); enableEdit(pc); }
-}
-
-function addCard(d){
-  const ph=gallery.querySelector('.placeholder');
-  if(ph){ setCard(ph,d,true); }
-  else {                                 /* 追加枠（17個目以降） */
-    const idx=gallery.querySelectorAll('.card').length;
-    const pc=document.createElement('div'); pc.className='card'; pc.dataset.index=idx; pc.dataset.id=d.id; pc.innerHTML=cardHTML(d);
-    gallery.appendChild(pc); enableDrag(pc); enableEdit(pc);
-
-    const sp=pc.cloneNode(true);
-    phoneContent.appendChild(sp);
-  }
+function setCard(pc,d){
+  pc.className='card'; pc.dataset.id=d.id; pc.innerHTML=cardHTML(d);
+  const sp=phoneMatch(pc); sp.className='card'; sp.dataset.id=d.id; sp.innerHTML=cardHTML(d);
+  enableDrag(pc); enableEdit(pc); enableSelect(pc);
 }
 
 function handleFile(file,slot=null){
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const data={id:Date.now().toString(36)+Math.random().toString(36).slice(2),
-                title:($('#titleInput').value.trim()||randomTitles[Math.floor(Math.random()*randomTitles.length)]),
-                src:e.target.result};
-    slot ? setCard(slot,data,true) : addCard(data);
-  };
-  reader.readAsDataURL(file);
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const data={id:Date.now().toString(36)+Math.random().toString(36).slice(2),title:$('#titleInput').value.trim()||randomTitles[Math.floor(Math.random()*randomTitles.length)],src:e.target.result};
+    slot?setCard(slot,data):setCard(gallery.querySelector('.placeholder')||createExtraSlot(),data);
+  }; r.readAsDataURL(file);
 }
 
-/* === DRAG & REORDER === */
+function createExtraSlot(){
+  const idx=gallery.querySelectorAll('.card').length;
+  const pc=document.createElement('div'); pc.dataset.index=idx; gallery.appendChild(pc); phoneContent.appendChild(pc.cloneNode()); return pc;
+}
+
+/* === DRAG REORDER === */
 let dragSrc=null;
-function enableDrag(c){
-  c.draggable=true;
-  c.ondragstart=()=>{dragSrc=c;c.classList.add('dragging');};
-  c.ondragend  =()=>{c.classList.remove('dragging');dragSrc=null;};
-  c.ondragover =e=>e.preventDefault();
-  c.ondrop     =e=>{e.preventDefault();if(!dragSrc||dragSrc===c)return;swapCards(dragSrc,c);};
-}
-function swapCards(a,b){
-  const p=a.parentNode,next=a.nextSibling===b?a:a.nextSibling;
-  p.insertBefore(a,b); p.insertBefore(b,next);
+const enableDrag=c=>{c.draggable=true;c.ondragstart=()=>{dragSrc=c;c.classList.add('dragging');};c.ondragend=()=>{c.classList.remove('dragging');dragSrc=null;};c.ondragover=e=>e.preventDefault();c.ondrop=e=>{e.preventDefault();if(!dragSrc||dragSrc===c)return;swap(dragSrc,c);};};
+function swap(a,b){const p=a.parentNode; p.insertBefore(a,b); p.insertBefore(b,a); const pa=phoneMatch(a),pb=phoneMatch(b); const pp=pa.parentNode; pp.insertBefore(pa,pb); pp.insertBefore(pb,pa);}
 
-  const pa=matchingPhone(a), pb=matchingPhone(b);
-  if(pa&&pb){
-    const pp=pa.parentNode,next2=pa.nextSibling===pb?pa:pa.nextSibling;
-    pp.insertBefore(pa,pb); pp.insertBefore(pb,next2);
+/* === SELECT & DELETE === */
+let selected=null;
+function enableSelect(c){c.onclick=()=>{document.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));c.classList.add('selected');selected=c;};}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Delete'&&selected){
+    const idx=selected.dataset.index;
+    const pcPar=selected.parentNode;
+    const ph=document.createElement('div'); ph.className='card placeholder'; ph.dataset.index=idx; ph.innerHTML='<div class=\"thumb-wrapper\"></div><div class=\"meta\"></div>';
+    pcPar.replaceChild(ph,selected);
+    const sp=phoneMatch(ph); sp.parentNode.replaceChild(ph.cloneNode(true),sp);
+    selected=null;
   }
-}
+});
 
-/* === INLINE EDIT === */
-function enableEdit(c){
+/* === TITLE EDIT === */
+const enableEdit=c=>{
   const t=c.querySelector('.title');
-  t.ondblclick=()=>{
-    if(document.body.classList.contains('mobile-only')) return;
-    const old=t.textContent;
+  t.ondblclick=()=>{if(document.body.classList.contains('mobile-only'))return;const old=t.textContent;
     const inp=document.createElement('input'); inp.className='edit-input'; inp.value=old;
-    let comp=false; inp.oncompositionstart=()=>comp=true; inp.oncompositionend=()=>comp=false;
-    const fin=s=>{const v=s&&inp.value.trim()?inp.value.trim():old;
-      const nt=document.createElement('div'); nt.className='title'; nt.textContent=v;
-      inp.replaceWith(nt); enableEdit(c);
-      matchingPhone(c).querySelector('.title').textContent=v;};
-    inp.onkeydown=e=>{if(e.key==='Enter'&&!comp)fin(true); if(e.key==='Escape')fin(false);};
-    inp.onblur=()=>fin(true);
+    const finish=s=>{const v=s&&inp.value.trim()?inp.value.trim():old;const nt=document.createElement('div');nt.className='title';nt.textContent=v;inp.replaceWith(nt);enableEdit(c);phoneMatch(c).querySelector('.title').textContent=v;};
+    inp.onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)finish(true);if(e.key==='Escape')finish(false);}; inp.onblur=()=>finish(true);
     t.replaceWith(inp); inp.focus(); inp.select();
   };
-}
+};
 
 /* 列スライダー */
 $('#colRange').oninput=e=>document.body.style.setProperty('--cols',e.target.value);
 document.body.style.setProperty('--cols',$('#colRange').value);
-/* === MODE TOGGLE === */
+/* === TOGGLE & SCROLL === */
 $('#pcBtn').onclick=()=>{document.body.className='pc-only';$('#pcBtn').classList.add('active');$('#spBtn').classList.remove('active');};
 $('#spBtn').onclick=()=>{document.body.className='mobile-only';$('#spBtn').classList.add('active');$('#pcBtn').classList.remove('active');};
 
-/* === HIDE TOPBAR ON SCROLL === */
 const phoneScreen=$('#phoneScreen'), phoneHead=$('#phoneHead'); let lastY=0;
-phoneScreen.addEventListener('scroll',()=>{
-  const y=phoneScreen.scrollTop;
-  if(y>lastY && y>80) phoneHead.classList.add('hidden');
-  else phoneHead.classList.remove('hidden');
-  lastY=y;
-});
+phoneScreen.addEventListener('scroll',()=>{const y=phoneScreen.scrollTop; if(y>lastY&&y>80) phoneHead.classList.add('hidden'); else phoneHead.classList.remove('hidden'); lastY=y;});
 </script>
 </body>
 </html>
